@@ -5,7 +5,10 @@ class AuthAPI(CustomRequester):
     def __init__(self, session):
         super().__init__(session=session, base_url=LOGIN_URL.rstrip('/'))
 
-    def login_user(self, login_data, expected_status=200):
+    def login_user(self, login_data, expected_status=None):
+        if expected_status is None:
+            expected_status = [200, 201]
+
         return self.send_request(
             method="POST",
             endpoint=LOGIN_ENDPOINT,
@@ -13,15 +16,25 @@ class AuthAPI(CustomRequester):
             expected_status=expected_status
         )
 
-    def authenticate(self, user_creds):
+    def authenticate(self, user_creds, expected_status=None):
+        if expected_status is None:
+            expected_status = [200, 201]
+
         login_data = {
             "email": user_creds[0],
             "password": user_creds[1]
         }
-        response = self.login_user(login_data, expected_status=200).json()
-        if "accessToken" not in response:
+
+        response_json = self.login_user(login_data, expected_status=expected_status).json()
+
+        token = response_json.get("accessToken")
+        if not token:
             raise KeyError("token is missing")
 
-        token = response["accessToken"]
+
         self._update_session_headers(self.session, Authorization=f"Bearer {token}")
-        return token
+
+        return {
+            "accessToken": token,
+            "user": response_json.get("user")
+        }

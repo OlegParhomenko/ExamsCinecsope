@@ -4,20 +4,20 @@ import os
 import random
 from dotenv import load_dotenv
 from faker import Faker
-from constans import MOVIES_ENDPOINT, BASE_URL
-from custom_requester.custom_requester import CustomRequester
-from tests.api.auth_api import AuthAPI
-from tests.api.api_manager import ApiManager
+from constans import BASE_URL
 from utils.data_generator import DataGenerator
+from clients.api_manager import ApiManager
 
 faker = Faker()
 load_dotenv()
+
 
 @pytest.fixture(scope="session")
 def admin_creds():
     username = os.getenv("ADMIN_USERNAME")
     password = os.getenv("ADMIN_PASSWORD")
     return username, password
+
 
 @pytest.fixture(scope="session")
 def session():
@@ -27,16 +27,12 @@ def session():
 
 
 @pytest.fixture(scope="session")
-def requester(api_manager):
-    from custom_requester.custom_requester import CustomRequester
-    return CustomRequester(session=api_manager.session, base_url=BASE_URL)
-
-@pytest.fixture(scope="session")
 def api_manager(session, admin_creds):
-    from tests.api.api_manager import ApiManager
+    from clients.api_manager import ApiManager
     manager = ApiManager(session)
     manager.auth_api.authenticate(admin_creds)
     return manager
+
 
 @pytest.fixture(scope="function")
 def new_movie():
@@ -50,14 +46,15 @@ def new_movie():
         "genreId": DataGenerator.generate_genre_id()
     }
 
+
 @pytest.fixture(scope="function")
 def create_movie_fixture(api_manager, new_movie):
-
     response = api_manager.movies_api.create_movie(new_movie, expected_status=201)
     response_data = response.json()
     movie_id = response_data["id"]
 
     yield {"id": movie_id, "response": response_data, "name": response_data["name"]}
+
 
 @pytest.fixture(scope="session")
 def new_params():
@@ -71,3 +68,13 @@ def new_params():
         "genreId": DataGenerator.generate_genre_id(),
         "createdAt": DataGenerator.generate_created_at()
     }
+
+
+@pytest.fixture(scope="session")
+def login_user(api_manager, admin_creds):
+    response_data = api_manager.auth_api.authenticate(admin_creds)
+
+    assert "accessToken" in response_data, 'Токен доступа отсутствует'
+    assert response_data["user"]["email"] == admin_creds[0]
+
+    return response_data
