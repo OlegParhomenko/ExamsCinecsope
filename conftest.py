@@ -10,6 +10,8 @@ from clients.api_manager import ApiManager
 from resources.user_creds import SuperAdminCreds
 from entities.user import User
 from constans import Roles
+from utils.user_with_pydantic import RegisteredUser
+
 
 faker = Faker()
 load_dotenv()
@@ -24,13 +26,16 @@ def test_user():
     random_name = DataGenerator.generate_random_name()
     random_password = DataGenerator.generate_random_password()
 
-    return {
+    user_data = {
         "email": random_email,
         "fullName": random_name,
         "password": random_password,
         "passwordRepeat": random_password,
         "roles": [Roles.USER.value],
     }
+
+    RegisteredUser(**user_data)
+    return user_data
 
 @pytest.fixture(scope="session")
 def admin_creds():
