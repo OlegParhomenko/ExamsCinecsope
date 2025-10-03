@@ -9,8 +9,8 @@ from utils.data_generator import DataGenerator
 from clients.api_manager import ApiManager
 from resources.user_creds import SuperAdminCreds
 from entities.user import User
-from utils.user_with_pydantic import Roles, RegisteredUser
-import pydantic
+from utils.user_with_pydantic import Roles, TestUser
+import json
 
 
 faker = Faker()
@@ -19,7 +19,7 @@ load_dotenv()
 
 @pytest.fixture(scope="function")
 # в примере это registration_user_data
-def test_user():
+def test_user() -> TestUser:
     """
     Генерация случайного пользователя для тестов.
     """
@@ -27,7 +27,7 @@ def test_user():
     random_name = DataGenerator.generate_random_name()
     random_password = DataGenerator.generate_random_password()
 
-    user = RegisteredUser(
+    return TestUser(
         email=random_email,
         fullName=random_name,
         password=random_password,
@@ -35,16 +35,7 @@ def test_user():
         roles=[Roles.USER]
     )
 
-    # user_data = {
-    #     "email": random_email,
-    #     "fullName": random_name,
-    #     "password": random_password,
-    #     "passwordRepeat": random_password,
-    #     "roles": [Roles.USER.value],
-    # }
-
-
-    return user.model_dump(exclude_unset=True)
+    # return user.model_dump(exclude_unset=True)
 
 @pytest.fixture(scope="session")
 def admin_creds():
@@ -129,15 +120,13 @@ def user_session():
         user.close_session()
 
 @pytest.fixture(scope="function")
-def creation_user_data(test_user):
-    user = RegisteredUser(**test_user)
-
-    update_user = user.model_copy(update={
+def creation_user_data(test_user: TestUser):
+    user = test_user.model_copy(update={
         "verified": True,
         "banned": False
     })
-
-    return update_user.model_dump(mode='json')
+    # return json.loads(user.model_dump_json())  # словарь с roles как строками
+    return user.model_dump(mode="json") # возвращает словарь с enum преобразованным в строку
 
 
 @pytest.fixture

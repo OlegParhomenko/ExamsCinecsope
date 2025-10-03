@@ -15,6 +15,6 @@ class UserApi(CustomRequester):
         return self.send_request(
             method="POST",
             endpoint="user",
-            json=user_data,
+            data=user_data,
             expected_status=expected_status
         )
