@@ -2,7 +2,7 @@ from clients.api_manager import ApiManager
 from utils.data_generator import DataGenerator
 import random
 import pytest
-from constans import Roles
+from utils.user_with_pydantic import Roles
 from entities.user import User
 
 class TestMoviesAPI:

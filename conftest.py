@@ -2,15 +2,15 @@ import pytest
 import requests
 import os
 import random
+from venv import logger
 from dotenv import load_dotenv
 from faker import Faker
-from constans import BASE_URL
 from utils.data_generator import DataGenerator
 from clients.api_manager import ApiManager
 from resources.user_creds import SuperAdminCreds
 from entities.user import User
-from constans import Roles
-from utils.user_with_pydantic import RegisteredUser
+from utils.user_with_pydantic import Roles, RegisteredUser
+import pydantic
 
 
 faker = Faker()
@@ -18,6 +18,7 @@ load_dotenv()
 
 
 @pytest.fixture(scope="function")
+# в примере это registration_user_data
 def test_user():
     """
     Генерация случайного пользователя для тестов.
@@ -26,16 +27,24 @@ def test_user():
     random_name = DataGenerator.generate_random_name()
     random_password = DataGenerator.generate_random_password()
 
-    user_data = {
-        "email": random_email,
-        "fullName": random_name,
-        "password": random_password,
-        "passwordRepeat": random_password,
-        "roles": [Roles.USER.value],
-    }
+    user = RegisteredUser(
+        email=random_email,
+        fullName=random_name,
+        password=random_password,
+        passwordRepeat=random_password,
+        roles=[Roles.USER]
+    )
 
-    RegisteredUser(**user_data)
-    return user_data
+    # user_data = {
+    #     "email": random_email,
+    #     "fullName": random_name,
+    #     "password": random_password,
+    #     "passwordRepeat": random_password,
+    #     "roles": [Roles.USER.value],
+    # }
+
+
+    return user.model_dump(exclude_unset=True)
 
 @pytest.fixture(scope="session")
 def admin_creds():
@@ -121,14 +130,14 @@ def user_session():
 
 @pytest.fixture(scope="function")
 def creation_user_data(test_user):
-    update_data = test_user.copy()
+    user = RegisteredUser(**test_user)
 
-    update_data.update({
+    update_user = user.model_copy(update={
         "verified": True,
         "banned": False
     })
 
-    return update_data
+    return update_user.model_dump(mode='json')
 
 
 @pytest.fixture
@@ -138,11 +147,12 @@ def super_admin(user_session):
     super_admin = User(
         SuperAdminCreds.USERNAME,
         SuperAdminCreds.PASSWORD,
-        [Roles.SUPER_ADMIN.value],
+        [Roles.SUPER_ADMIN],
         new_session)
 
     super_admin.api.auth_api.authenticate(super_admin.creds)
     return super_admin
+
 
 @pytest.fixture
 def admin_user(user_session, super_admin, creation_user_data):
@@ -151,7 +161,7 @@ def admin_user(user_session, super_admin, creation_user_data):
     admin = User(
         creation_user_data["email"],
         creation_user_data["password"],
-        [Roles.ADMIN.value],
+        [Roles.ADMIN],
         new_session
     )
 
@@ -167,7 +177,7 @@ def common_user(user_session, super_admin, creation_user_data):
     common_user = User(
         creation_user_data["email"],
         creation_user_data["password"],
-        [Roles.USER.value],
+        [Roles.USER],
         new_session
     )
 
