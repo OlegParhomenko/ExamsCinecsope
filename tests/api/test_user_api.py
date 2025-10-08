@@ -26,3 +26,7 @@ class TestUserAPI:
         assert response_by_id.fullName == user_to_create.fullName
         assert response_by_id.roles == user_to_create.roles
         assert response_by_id.verified is True
+
+    def test_db_requests(self, super_admin, db_helper, created_test_user_db):
+        assert created_test_user_db == db_helper.get_user_by_id(created_test_user_db.id)
+        assert db_helper.user_exists_by_email("api1@gmail.com")

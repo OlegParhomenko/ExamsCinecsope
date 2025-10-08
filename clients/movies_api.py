@@ -7,9 +7,15 @@ class MoviesAPI(CustomRequester):
 
     MOVIE_BASE_URL = "https://api.dev-cinescope.coconutqa.ru"
 
-    def __init__(self, session):
+    def __init__(self, session, token=None):
         self.session = session
         super().__init__(session, self.MOVIE_BASE_URL)
+        self.headers = {
+            "Content-Type": "application/json",
+            "Accept": "application/json"
+        }
+        if token:
+            self.headers["Authorization"] = f"Bearer {token}"
 
 
     def create_movie(self, movie_data, expected_status=201):

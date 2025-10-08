@@ -2,7 +2,6 @@ import pytest
 import requests
 import os
 import random
-from venv import logger
 from dotenv import load_dotenv
 from faker import Faker
 from utils.data_generator import DataGenerator
@@ -10,13 +9,35 @@ from clients.api_manager import ApiManager
 from resources.user_creds import SuperAdminCreds
 from entities.user import User
 from utils.user_with_pydantic import Roles, TestUser
-import json
-
+from sqlalchemy.orm import Session
+from db_requester.db_client import get_db_session
+from db_requester.db_helpers import DBHelper
+import datetime
 
 faker = Faker()
 load_dotenv()
 
 
+@pytest.fixture(scope="function")
+def db_helper(db_session) -> DBHelper:
+    """
+    Фикстура для экземпляра хелпера
+    """
+    db_helper = DBHelper(db_session)
+    return db_helper
+
+
+@pytest.fixture(scope="module")
+def db_session() -> Session:
+    """
+    Фикстура, которая создает и возвращает сессию для работы с базой данных
+    После завершения теста сессия автоматически закрывается
+    """
+    db_session = get_db_session()
+    yield db_session
+    db_session.close()
+
+    
 @pytest.fixture(scope="function")
 # в примере это registration_user_data
 def test_user() -> TestUser:
@@ -34,8 +55,21 @@ def test_user() -> TestUser:
         passwordRepeat=random_password,
         roles=[Roles.USER]
     )
-
     # return user.model_dump(exclude_unset=True)
+
+
+@pytest.fixture(scope="function")
+def created_test_user_db(db_helper):
+    """
+    Фикстура, которая создает тестового пользователя в БД
+    и удаляет его после завершения теста
+    """
+    user = db_helper.create_test_user(DataGenerator.generate_user_data())
+    yield user
+    # Cleanup после теста
+    if db_helper.get_user_by_id(user.id):
+        db_helper.delete_user(user)
+
 
 @pytest.fixture(scope="session")
 def admin_creds():
@@ -81,6 +115,41 @@ def create_movie_fixture(api_manager, new_movie):
     yield {"id": movie_id, "response": response_data, "name": response_data["name"]}
 
 
+@pytest.fixture(scope="function")
+def create_movie_fixture_db(db_helper, new_movie):
+    import datetime
+
+    movie_data = {
+        "name": new_movie.get("name"),
+        "price": new_movie.get("price"),
+        "description": new_movie.get("description"),
+        "image_url": new_movie.get("imageUrl"),
+        "location": new_movie.get("location"),
+        "published": new_movie.get("published"),
+        "rating": new_movie.get("rating", 0.0),
+        "genre_id": new_movie.get("genreId"),
+        "created_at": new_movie.get("created_at") or datetime.datetime.now()
+    }
+
+    movie_obj = db_helper.create_test_movie(movie_data)
+
+    yield movie_obj
+
+    movie_from_db = db_helper.get_movie_by_id(movie_obj.id)
+    if movie_from_db:
+        db_helper.delete_movie(movie_from_db)
+
+
+# @pytest.fixture(scope="function")
+# def create_movie_fixture_db(db_helper, new_movie):
+#     movie = db_helper.create_test_movie(new_movie)
+#     yield movie
+#     # Cleanup после теста
+#     if db_helper.get_movie_by_id(movie["id"]):
+#         db_helper.delete_movie(movie["id"])
+
+
+
 @pytest.fixture(scope="session")
 def new_params():
     return {
@@ -118,6 +187,9 @@ def user_session():
 
     for user in user_pool:
         user.close_session()
+
+
+
 
 @pytest.fixture(scope="function")
 def creation_user_data(test_user: TestUser):
