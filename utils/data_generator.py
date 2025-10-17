@@ -40,7 +40,7 @@ class DataGenerator:
 
     @staticmethod
     def generate_random_price():
-        price = random.randint(1,100)
+        price = random.randint(1,1000)
         return price
 
     @staticmethod

@@ -14,7 +14,6 @@ class TestAuthAPI:
         # user_data['roles'] = [role.value for role in user_data["roles"]]
         # print(user_data)
         response = api_manager.auth_api.register_user(user_data)
-        print(response.json())
         register_user_response = RegisterUserResponse(**response.json())
 
         assert register_user_response.email == creation_user_data['email'], "Email не совпадает"

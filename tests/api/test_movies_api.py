@@ -8,6 +8,7 @@ import datetime
 from db_models.db_movies_model import MovieDBModel
 from sqlalchemy.orm import Session
 import allure
+from utils.movies_with_pydantic import TestMovies,MoviesResponse, MovieListResponse
 
 
 @allure.epic('Тестирование АПИ "Movies"')
@@ -25,16 +26,16 @@ class TestMoviesAPI:
     @allure.title("Тест создания фильма")
     @allure.step('Шаг 1, 2 выполнены автоматически с помощью фикстур')
     def test_create_movie(self, new_movie, super_admin):
+        new_movie_data = new_movie.model_dump(mode='json')
         with allure.step('Передаём тестовые данные на сервер, и получаем тело ответа'):
-            response = super_admin.api.movies_api.create_movie(new_movie, expected_status=[200, 201])
-
-            response_data = response.json()
+            response = super_admin.api.movies_api.create_movie(new_movie_data, expected_status=[200, 201])
+            response_data = MoviesResponse(**response.json())
         with allure.step('Сравниваем тело ответа, с тестовыми данными отправленными на сервер'):
-            assert response_data['name'] == new_movie['name'], 'Имя фильма не совпадает'
+            assert response_data.name == new_movie_data['name'], 'Имя фильма не совпадает'
             assert response.status_code in (201, 200)
-            assert 'id' in response_data, "ID фильма отсутствует в ответе"
-            assert 'createdAt' in response_data, 'Дата создания фильма отсутствует в ответе'
-            assert 'name' in response_data['genre'], 'Жанр не указан'
+            assert response_data.id, "ID фильма отсутствует в ответе"
+            assert response_data.createdAt, 'Дата создания фильма отсутствует в ответе'
+            assert response_data.genre.name, 'Жанр не указан'
 
 
     @allure.story("Работа с АПИ 'Movies' без должных прав")
@@ -73,7 +74,7 @@ class TestMoviesAPI:
         ],
         ids=["super_admin", "admin", "common_user"]
     )
-    def test_delete_movie_role_based(self,create_movie_fixture, super_admin, user_session, role, expected_status):
+    def test_delete_movie_role_based(self, create_movie_fixture, super_admin, user_session, role, expected_status):
         movie_id = create_movie_fixture['id']
 
         if role == "super_admin":
@@ -101,9 +102,9 @@ class TestMoviesAPI:
         response = user_api.delete_movie(movie_id, expected_status=expected_status)
 
         if expected_status == 200:
-            data = response.json()
-            assert data['id'] == movie_id
-            assert data['name'] == create_movie_fixture['response']['name']
+            movie_response = MoviesResponse(**response.json())
+            assert movie_response.id == movie_id
+            assert movie_response.name == create_movie_fixture['response']['name']
             user_api.get_movie(movie_id, expected_status=404)
         else:
             assert response.status_code == expected_status, f"Пользователь с ролью {role} не должен иметь право удалять фильм"
@@ -130,10 +131,10 @@ class TestMoviesAPI:
         new_params['locations'] = locations
         new_params['genreId'] = genre_id
         response = common_user.api.movies_api.get_movies(new_params, expected_status=200)
-        response_data = response.json()
+        response_data = MovieListResponse.model_validate_json(response.text)
 
-        assert 'movies' in response_data, 'Отсутствует список фильмов'
-        assert isinstance(response_data['movies'], list), "Поле movies должно быть списком"
+        assert response_data.movies, 'Отсутствует список фильмов'
+        assert isinstance(response_data.movies, list), "Поле movies должно быть списком"
     @allure.story("Тест на получения фильма")
     @allure.description("""
         Данный тест проверяет что любой пользователь может получить нужный фильм по id
@@ -172,8 +173,6 @@ class TestMoviesAPI:
             "published": create_movie_fixture['response']['published'],
             "genreId": create_movie_fixture['response']['genreId'],
         }
-        print("PATCH base_url:", super_admin.api.movies_api.base_url)
-        print("Movie ID:", movie_id)
 
         response = super_admin.api.movies_api.patch_movie(movie_id, update_data, expected_status=200)
         data = response.json()

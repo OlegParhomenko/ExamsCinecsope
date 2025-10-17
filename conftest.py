@@ -12,10 +12,40 @@ from utils.user_with_pydantic import Roles, TestUser
 from sqlalchemy.orm import Session
 from db_requester.db_client import get_db_session
 from db_requester.db_helpers import DBHelper
-import datetime
+from utils.movies_with_pydantic import TestMovies
+from enum import Enum
+from Tools import Tools
 
 faker = Faker()
 load_dotenv()
+
+DEFAULT_TIMEOUT = 30000
+
+@pytest.fixture(scope="session")
+def browser(playwright):
+    browser = playwright.chromium.launch(headless=False, slow_mo=50)
+    yield browser
+    browser.close()
+
+
+@pytest.fixture(scope="function")
+def context(browser):
+    context = browser.new_context()
+    context.tracing.start(screenshots=True, snapshots=True, sources=True)
+    context.set_default_timeout(DEFAULT_TIMEOUT)
+    yield context
+    log_name = f"trace_{Tools.get_timestamp()}.zip"
+    trace_path = Tools.files_dir('playwright_trace', log_name)
+    context.tracing.stop(path=trace_path)
+    context.close()
+
+
+@pytest.fixture(scope="function")
+def page(context):
+    page = context.new_page()
+    yield page
+    page.wait_for_timeout(DEFAULT_TIMEOUT)
+    page.close()
 
 
 @pytest.fixture(scope="function")
@@ -64,7 +94,11 @@ def created_test_user_db(db_helper):
     Фикстура, которая создает тестового пользователя в БД
     и удаляет его после завершения теста
     """
-    user = db_helper.create_test_user(DataGenerator.generate_user_data())
+
+    user_data = DataGenerator.generate_user_data()
+    user_data["verified"] = True
+    user_data["banned"] = False
+    user = db_helper.create_test_user(user_data)
     yield user
     # Cleanup после теста
     if db_helper.get_user_by_id(user.id):
@@ -94,21 +128,34 @@ def api_manager(session, admin_creds):
 
 
 @pytest.fixture(scope="function")
-def new_movie():
-    return {
-        "name": f"{DataGenerator.generate_movie_title()}_{random.randint(1000, 9999)}",
-        "imageUrl": DataGenerator.generate_random_url(),
-        "price": DataGenerator.generate_random_price(),
-        "description": DataGenerator.generate_random_description(),
-        "location": DataGenerator.generate_random_location(),
-        "published": DataGenerator.generate_published(),
-        "genreId": DataGenerator.generate_genre_id()
-    }
+def new_movie() -> TestMovies:
+    name = f"{DataGenerator.generate_movie_title()}_{random.randint(1000, 9999)}"
+    image_url = DataGenerator.generate_random_url()
+    price = DataGenerator.generate_random_price()
+    description = DataGenerator.generate_random_description()
+    location = DataGenerator.generate_random_location()
+    published = DataGenerator.generate_published()
+    genre_id = DataGenerator.generate_genre_id()
 
+
+    return TestMovies(
+        name=name,
+        imageUrl=image_url,
+        price=price,
+        description=description,
+        location=location,
+        published=published,
+        genreId=genre_id,
+    )
 
 @pytest.fixture(scope="function")
 def create_movie_fixture(api_manager, new_movie):
-    response = api_manager.movies_api.create_movie(new_movie, expected_status=201)
+    new_movie_data = new_movie.model_dump()
+
+    if isinstance(new_movie_data.get("location"), Enum):
+        new_movie_data["location"] = new_movie_data["location"].value
+
+    response = api_manager.movies_api.create_movie(new_movie_data, expected_status=201)
     response_data = response.json()
     movie_id = response_data["id"]
 
